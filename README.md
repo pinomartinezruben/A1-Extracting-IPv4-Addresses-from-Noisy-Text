@@ -29,7 +29,7 @@ Generative AI was intentionally used for this assignment, as required by the ass
 
 The detailed disclosure is in **[AI_USAGE.md](AI_USAGE.md)**.
 
-The exact prompt used to generate the C++ implementation is preserved verbatim in **[docs/code_generation_prompt.txt](docs/code_generation_prompt.txt)**. The corresponding Claude response is preserved in **[claude_code_response.md](docs/claude_code_response.md)**.
+The exact prompt used to generate the C++ implementation is preserved verbatim in **[docs/code_generation_prompt.txt](code_generation_prompt.txt)**. The corresponding Claude response is preserved in **[claude_code_response.md](docs/claude_code_response.md)**.
 
 ## Files
 
