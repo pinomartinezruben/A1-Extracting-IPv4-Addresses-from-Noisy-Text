@@ -54,9 +54,33 @@ The fact that the first generated implementation did not require a parser-logic 
 
 ## Modifications to AI-generated output
 
-No parser-logic changes were made to the final submitted implementation after Claude generated it.
+Testing exposed some issues in earlier AI-generated versions of the
+parser. 
 
-The only environment-specific adjustment was temporarily naming the source `main.cpp` when using an online compiler that required that filename. The submitted source remains `ipv4_extractor.cpp`.
+### Invalid port handling
+
+An earlier implementation could treat an invalid port as though no port
+had been supplied. For example, `1.2.3.4:99999` could incorrectly fall
+back to `1.2.3.4`.
+
+I changed the parser so that once a colon is encountered, failure to
+validate the port causes the entire candidate to fail.
+
+I retested the port boundaries and malformed cases including `0`,
+`65535`, `65536`, `080`, an empty port, and multiple colons.
+
+### Leading zeros
+
+Range checking alone was insufficient because values such as `001`
+numerically evaluate to a legal octet value. I added a separate
+structural check that rejects any multi-digit octet or port beginning
+with `0`.
+
+### Verification after corrections
+
+After each correction I reran the relevant small regression cases first.
+Once those passed, I reran the complete adversarial `tests.txt` suite to
+check that the fix had not broken previously working cases.
 
 ## Verification statement
 
