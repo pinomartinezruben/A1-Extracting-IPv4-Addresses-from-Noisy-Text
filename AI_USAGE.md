@@ -6,7 +6,7 @@
 
 **OpenAI ChatGPT (GPT-5.6 Sol)** was used to help construct an adversarial testing prompt, troubleshoot how to supply multi-line input in the online compiler, review the test output, and help prepare this disclosure.
 
-These tools were consulted on **September 27–28, 2026**. The date range is used because some saved/exported material may reflect UTC while the work was performed around midnight local time.
+These tools were consulted on **September 27, 2026**.
 
 ## Code attribution
 
