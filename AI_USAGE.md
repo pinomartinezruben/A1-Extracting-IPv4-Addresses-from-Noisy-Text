@@ -2,7 +2,7 @@
 
 ## Tools and dates
 
-**Anthropic Claude** was used to generate the C++ implementation and later to generate a large adversarial `tests.txt` file. The exact Claude model/version was not recorded in the saved transcript, so I am not claiming a specific version.
+**Anthropic Claude (Sonnet 5)** was used to generate the C++ implementation and later to generate a large adversarial `tests.txt` file. The exact Claude model/version was not recorded in the saved transcript, so I am not claiming a specific version.
 
 **OpenAI ChatGPT (GPT-5.6 Sol)** was used to help construct an adversarial testing prompt, troubleshoot how to supply multi-line input in the online compiler, review the test output, and help prepare this disclosure.
 
