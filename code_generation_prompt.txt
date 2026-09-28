@@ -1,0 +1,274 @@
+# ROLE AND GOAL
+
+You are an expert C++ programmer and a patient teacher. Write one complete, compilable, single-file C++ program that solves the assignment in Section 1.
+
+Section 2 resolves every ambiguity in the assignment. Treat it as binding and do not ask me clarifying questions; proceed using those decisions. Sections 3-8 specify the code structure, algorithm, comment style, tests, and response format.
+
+==================================================================
+# SECTION 1 - ORIGINAL ASSIGNMENT (verbatim)
+==================================================================
+
+Write a C or C++ program that reads a line of text and extracts a single valid IPv4 address, optionally followed by a port number, embedded anywhere in that text. Only digits, periods (.), and colons (:) are ever part of a valid token; every other character is garbage and is skipped. A candidate token must match the address grammar in full: no partial matches, no truncating to find a valid piece inside a longer run.
+
+An address is four octets separated by periods (octet.octet.octet.octet), each octet 1-3 digits, value 0-255, no leading zero unless the value is exactly 0. An optional :port may follow the fourth octet: 1-5 digits, value 0-65535, same leading-zero rule. If a colon is present, the port must be fully valid or the entire match, address included, is rejected.
+
+Function prototype
+The function returns whether a valid address was found, and delivers the address and port through two additional parameters.
+C:
+// Returns 1 if a valid address was found, 0 otherwise.
+// On success: *outAddress holds the 32-bit value, and
+// *outPort holds the port number, or -1 if no port was present.
+// On failure: *outAddress is set to 0 and *outPort is set to -1.
+int extractIPv4(const char* str, unsigned long* outAddress, int* outPort);
+C++
+// Returns true if a valid address was found, false otherwise.
+// On success: outAddress holds the 32-bit value,
+// and outPort holds the port number, or -1 if no port was present.
+// On failure: outAddress is set to 0 and outPort is set to -1.
+bool extractIPv4(const std::string& str, unsigned long& outAddress, int& outPort);
+
+Built-in functions/libraries you may not use
+* Any string-to-number conversion function: atoi, atol, atoll, strtol, strtoul, strtod, stoi, stol, stoul, sscanf, scanf with numeric conversions.
+* Any address-parsing library function: inet_aton, inet_pton, inet_addr, or equivalents.
+* Any regular-expression facility (std::regex, POSIX regex.h, or similar). The parsing and validation logic must be my own character-by-character code, not a pattern matched by a library.
+* Standard character-classification functions (isdigit, etc.) are fine to use.
+
+Other requirements
+* Exactly one valid address may be extracted per input line; everything else in the line is either garbage (skipped) or part of a candidate token that fails validation.
+* Reject anything that does not exactly match the grammar above: wrong octet count, empty octet, out-of-range octet or port, a disallowed leading zero, a second colon, a colon not immediately after the fourth octet, or a stray period/colon directly adjacent to an otherwise-valid address.
+* On success, print: "Extracted IPv4 address: A.B.C.D (decimal value: N, port: P) " where N is the 32-bit decimal value and P is the port number or the literal text none.
+
+Program requirements
+* Input loop: main continuously prompts the user for input until the user enters END (case-sensitive), then prints "Program terminated." and exits.
+* Extraction function: implement extractIPv4 exactly as prototyped above. All digit accumulation must be done by hand.
+* Display: main receives the result from extractIPv4 and formats the output exactly as specified above.
+
+==================================================================
+# SECTION 2 - BINDING DECISIONS (ASSUMPTIONS)
+==================================================================
+
+## Language and build
+A1. Use C++ (not C), with the C++ prototype exactly as written: `bool extractIPv4(const std::string& str, unsigned long& outAddress, int& outPort);`. Do not rename the function or change its parameter types, parameter names, or return type.
+A2. Target standard C++17. The file must compile with zero warnings using:
+    g++ -std=c++17 -Wall -Wextra -pedantic -o ipv4 ipv4_extractor.cpp
+A3. Only these headers are allowed: <iostream>, <string>, <cctype>. Do not include <regex>, <sstream>, <cstdlib>, <cstdio>, <charconv>, <arpa/inet.h>, or anything else.
+A4. Everything lives in one file named ipv4_extractor.cpp. No global variables, no static local state, no classes.
+
+## Tokenizing
+A5. Token characters are exactly: '0' through '9', '.', and ':'. Every other character is garbage. That includes letters, spaces, tabs, punctuation such as - _ , ; / \ ( ) [ ] { } @ = # " ' and any non-ASCII byte.
+A6. A garbage character acts as a DELIMITER. It splits the text into separate tokens. It is NOT deleted, and the pieces on either side are NEVER glued back together. Example: "192.168.1x.5" contains two tokens, "192.168.1" and ".5", and both are invalid.
+A7. A candidate token is a MAXIMAL run of consecutive token characters. Always extend the run over every adjacent token character on both sides. Never begin a match in the middle of a run, and never stop before the run ends.
+A8. Each candidate token is validated as a whole against the grammar. It is entirely valid or entirely discarded. Never look for a valid substring inside an invalid token. Example: "1.2.3.4.5" is rejected; it is not "1.2.3.4" followed by leftovers.
+A9. Scan left to right. The first token that validates is the answer. Stop immediately and do not examine later tokens. A token that fails validation does not stop the scan; move on to the next token. (The assignment says a line contains at most one valid address. Leftmost-wins is my deterministic tie-break if there are two.)
+
+## Grammar
+A10. Full grammar of one token: octet '.' octet '.' octet '.' octet [ ':' port ]
+A11. Octet rules:
+     - 1 to 3 decimal digits (a 4th digit means reject, even "0000").
+     - Value 0 to 255.
+     - If it has more than one digit, its first digit must not be '0'. So "0" is valid, while "00", "000", "01", "007" are invalid.
+A12. Port rules:
+     - 1 to 5 decimal digits (a 6th digit means reject, even "000000").
+     - Value 0 to 65535. Port 0 is valid.
+     - If it has more than one digit, its first digit must not be '0'. So "0" is valid, while "00", "080", "0080", "00000" are invalid.
+A13. Exactly three periods, each strictly between two octets. A leading period, trailing period, doubled period, or a period after the 4th octet means reject.
+A14. A colon is legal only immediately after the last digit of the 4th octet, and only once, and it must be followed by at least one port digit. An empty port ("1.2.3.4:"), a second colon, a leading colon, or a colon anywhere else in the token means reject.
+A15. Nothing may follow the port (or the 4th octet, if there is no port) inside the same token. "1.2.3.4:80." is rejected.
+A16. No fallback. If a colon is present and the port is invalid, the WHOLE token is rejected. Do NOT return the address with "no port". Example: "1.2.3.4:99999" is rejected.
+
+## Numbers
+A17. Digits are accumulated by hand with `value = value * 10 + (digit - '0')`, using an `unsigned long` accumulator. The digit-count limit is checked BEFORE each digit is accumulated, so overflow is impossible and very long digit runs fail fast. No conversion function from any library, including stringstream >>, std::from_chars, and std::stoull.
+A18. The 32-bit value is (octet1 << 24) | (octet2 << 16) | (octet3 << 8) | octet4, where the first octet written is the most significant byte. Compute it in `unsigned long`, never in `int`, so no sign problems occur. The result is always between 0 and 4294967295.
+A19. Port is stored in the `int` outPort. The value -1 means "no port". Port 0 is a real port and is not "none".
+A20. Success is decided ONLY by extractIPv4's return value. "0.0.0.0" succeeds with address 0. main must never infer failure from address == 0 or port == -1.
+
+## Function contract
+A21. The very first thing extractIPv4 does is set outAddress = 0 and outPort = -1. It writes the real values only after a token has been fully validated (use local temporaries so a half-parsed token can never leak into the outputs). On failure the outputs remain 0 and -1.
+A22. extractIPv4 never prints, never reads input, and has no side effects other than the two output parameters.
+A23. `char` may be signed. Any call to isdigit must be `std::isdigit(static_cast<unsigned char>(c))`.
+
+## main and I/O
+A24. Read each line with std::getline(std::cin, line), so lines of any length work.
+A25. After reading, remove exactly one trailing '\r' if present (Windows line endings). Do no other trimming.
+A26. Quit check: the line is exactly "END" after A25. Case-sensitive. These do NOT quit and are treated as ordinary input: "end", "End", "END " (trailing space), " END", "END 1.2.3.4".
+A27. If getline fails (end of input / Ctrl-D) without END being seen, leave the loop and behave exactly as if END had been entered, printing the termination message. No infinite loop.
+A28. Before every read, print this prompt with no newline and flush it: `Enter a line of text (or END to quit): `
+A29. Success output, exactly, followed by a single newline:
+     Extracted IPv4 address: A.B.C.D (decimal value: N, port: P)
+     - There is NO trailing space. (The trailing space in the assignment text is treated as a formatting artifact.)
+     - A.B.C.D is rebuilt inside main from the 32-bit value: A = (addr >> 24) & 0xFF, B = (addr >> 16) & 0xFF, C = (addr >> 8) & 0xFF, D = addr & 0xFF. main only receives the combined value and the port.
+     - N is the unsigned decimal value.
+     - P is the port in decimal, or the lowercase literal text none when outPort == -1.
+A30. Failure output (unspecified by the assignment; this is my choice), followed by a newline: `No valid IPv4 address found.`
+A31. An empty line or whitespace-only line is NOT a quit; it goes through extraction and prints the failure message.
+A32. On quit or EOF print `Program terminated.` followed by a newline, then return 0 from main.
+
+==================================================================
+# SECTION 3 - REQUIRED CODE STRUCTURE
+==================================================================
+
+Order of the file, top to bottom:
+1. A header comment block (what the program does, the grammar in plain words, how to compile).
+2. The three #include lines.
+3. Named constants (no magic numbers anywhere in the logic):
+   NUM_OCTETS = 4, MAX_OCTET_DIGITS = 3, MAX_OCTET_VALUE = 255, MAX_PORT_DIGITS = 5, MAX_PORT_VALUE = 65535, NO_PORT = -1, and the quit word "END".
+4. Prototypes for every function.
+5. main.
+6. Definitions of the helpers, inside an anonymous namespace, followed by extractIPv4.
+
+Style rules:
+- Always use std:: explicitly. No `using namespace std;`.
+- No `auto`, no lambdas, no goto, no clever one-liners, no ternary chains. Write it the plain, obvious way, because a beginner has to read it.
+- Braces on every if/while/for, even one-line bodies. 4-space indentation. Lines up to about 100 characters.
+- Use std::size_t for string positions.
+
+Exactly these helper functions (in the anonymous namespace):
+
+1. `bool isDigitChar(char c)` - true if c is '0' to '9', using isdigit with the cast from A23.
+
+2. `bool isTokenChar(char c)` - true if c is a digit, '.', or ':'.
+
+3. `bool readNumberField(const std::string& s, std::size_t& pos, std::size_t end, int maxDigits, unsigned long maxValue, unsigned long& outValue)`
+   Reads ONE number (an octet or a port) starting at pos, never reading at or past `end`. `pos` is a reference so the caller's position moves forward past the digits. Exact steps:
+   a. digitStart = pos; count = 0; value = 0.
+   b. While pos < end and s[pos] is a digit:
+        - if count == maxDigits, return false (this would be one digit too many)
+        - value = value * 10 + (s[pos] - '0'); count++; pos++.
+   c. If count == 0, return false (empty field).
+   d. If count > 1 and s[digitStart] == '0', return false (leading zero).
+   e. If value > maxValue, return false.
+   f. outValue = value; return true.
+   This one function serves both octets (3 digits, max 255) and ports (5 digits, max 65535).
+
+4. `bool parseCandidate(const std::string& s, std::size_t start, std::size_t end, unsigned long& outAddress, int& outPort)`
+   Validates the single token s[start .. end), where `end` is one past the last character. Exact steps:
+   a. pos = start; address = 0 (local variable).
+   b. Loop i from 0 to NUM_OCTETS - 1:
+        - call readNumberField for an octet; if it returns false, return false.
+        - address = (address << 8) | octetValue.
+        - if i < NUM_OCTETS - 1: require pos < end and s[pos] == '.', otherwise return false; then pos++.
+   c. port = NO_PORT.
+   d. If pos < end:
+        - require s[pos] == ':', otherwise return false (this catches a stray '.' after the 4th octet).
+        - pos++.
+        - call readNumberField for a port; if false, return false (this catches an empty port, a bad port, or a leading zero).
+        - port = static_cast<int>(portValue).
+   e. If pos != end, return false (leftovers: a second colon, a trailing period, and so on).
+   f. Write outAddress = address and outPort = port. Return true.
+
+5. `bool extractIPv4(const std::string& str, unsigned long& outAddress, int& outPort)`
+   a. Set the failure defaults (A21).
+   b. i = 0. While i < str.size():
+        - If str[i] is not a token character: i++ and continue.
+        - Otherwise start = i; advance i while it is still a token character; end = i. (That is the maximal run from A7.)
+        - Call parseCandidate(str, start, end, ...) using local temporaries. If it returns true, copy the temporaries into the output parameters and return true.
+        - If it returns false, just keep looping; i already sits at the end of the failed token.
+   c. After the loop, return false.
+
+main: loop as described in A24-A32. It calls extractIPv4 exactly once per non-END line and formats the output itself (inline in main, no separate print helper).
+
+==================================================================
+# SECTION 4 - COMMENT STYLE (IMPORTANT)
+==================================================================
+
+The comments must sound like a friendly beginner explaining, in plain words, exactly what each piece of code is doing. Think "someone who just learned this and is writing it out to prove they understand it."
+
+- Comment nearly every meaningful line or tiny block, in casual, literal language. Explain both WHAT and WHY.
+- Explain C++ ideas the first time they appear: what `&` on a parameter means ("this is the caller's real variable, not a copy, so changing it changes theirs"), what std::size_t is, what `const` promises, what a reference is, what `>>`, `<<`, `|` and `& 0xFF` do to bits ("slide the bits over" / "keep only the lowest 8 bits, which is one byte").
+- Explain the char-to-number trick: characters are stored as numbers and the digits sit next to each other in order, so '7' - '0' equals 7.
+- For each grammar rule in the code, include a tiny example of what it rejects in the comment (e.g. "// '01' has a leading zero so we throw it out").
+- Say plainly why we check the digit count BEFORE adding a digit (so numbers can never get too big).
+- Explain in a comment why garbage splits tokens instead of being deleted.
+- Put a short comment above every function: what goes in, what comes out, what it does.
+- Accuracy matters: the tone is casual but every comment must be technically correct. No jokes at the code's expense, no filler comments on closing braces, no comments that just repeat the code word for word.
+
+Tone example:
+    // c is one character from the line. Characters are secretly stored as numbers,
+    // and '0'..'9' sit right next to each other in order, so c - '0' turns the
+    // character '7' into the real number 7.
+    value = value * 10 + static_cast<unsigned long>(c - '0');
+    // ^ multiplying by 10 slides the old digits one place left, then we add the new one
+    // (like building 4 -> 45 -> 456 as we read the digits '4', '5', '6')
+
+==================================================================
+# SECTION 5 - FORBIDDEN THINGS (RECAP)
+==================================================================
+
+Anywhere in the file, including helpers: atoi, atol, atoll, strtol, strtoul, strtoull, strtod, stoi, stol, stoul, stoull, sscanf, scanf, std::from_chars, any stringstream / istringstream extraction into a number, inet_aton, inet_pton, inet_addr, std::regex, regex.h, or any other library that parses numbers or addresses for me. All parsing is hand-written, character by character. isdigit is allowed.
+
+==================================================================
+# SECTION 6 - TEST CASES
+==================================================================
+
+Format: input -> expected result. "REJECT" means the program prints "No valid IPv4 address found.". Each accepted result shows the decimal value and the port.
+
+1.  `192.168.1.1` -> ACCEPT, 3232235777, none
+2.  `192.168.1.1:80` -> ACCEPT, 3232235777, 80
+3.  `0.0.0.0` -> ACCEPT, 0, none
+4.  `0.0.0.0:0` -> ACCEPT, 0, 0
+5.  `255.255.255.255:65535` -> ACCEPT, 4294967295, 65535
+6.  `1.2.3.4` -> ACCEPT, 16909060, none
+7.  `8.8.8.8` -> ACCEPT, 134744072, none
+8.  `10.0.0.1:8080` -> ACCEPT, 167772161, 8080
+9.  `Connect to 172.16.254.1:443 please` -> ACCEPT, 2886794753, 443
+10. `abc192.168.1.1xyz` -> ACCEPT, 3232235777, none (letters are garbage and separate)
+11. `(10.1.2.3);` -> ACCEPT, 167838211, none
+12. `bad 999.1.1.1 then 1.2.3.4` -> ACCEPT, 16909060, none (first token fails, scan continues)
+13. `1.2.3.4 5.6.7.8` -> ACCEPT, 16909060, none (leftmost wins)
+14. `1.2.3.4a:80` -> ACCEPT, 16909060, none ('a' splits it into "1.2.3.4" and ":80")
+15. `1.2.3.4 : 80` -> ACCEPT, 16909060, none (spaces split it)
+16. `ip is 1.2.3.4:6a` -> ACCEPT, 16909060, 6
+17. `-1.2.3.4` -> ACCEPT, 16909060, none ('-' is garbage)
+18. `192.168.1x.5` -> REJECT (tokens "192.168.1" and ".5")
+19. `256.1.1.1` -> REJECT
+20. `1.2.3.256` -> REJECT
+21. `01.2.3.4` -> REJECT
+22. `1.2.3.04` -> REJECT
+23. `00.0.0.0` -> REJECT
+24. `0000.1.1.1` -> REJECT
+25. `1.2.3.4567` -> REJECT
+26. `1.2.3` -> REJECT
+27. `1.2.3.4.5` -> REJECT
+28. `1..3.4` -> REJECT
+29. `.1.2.3.4` -> REJECT
+30. `1.2.3.4.` -> REJECT
+31. `1.2.3.4:` -> REJECT
+32. `1.2.3.4:080` -> REJECT
+33. `1.2.3.4:00` -> REJECT
+34. `1.2.3.4:65536` -> REJECT
+35. `1.2.3.4:99999` -> REJECT
+36. `1.2.3.4:123456` -> REJECT
+37. `1.2.3.4:5:6` -> REJECT
+38. `1.2.3.4::80` -> REJECT
+39. `:1.2.3.4` -> REJECT
+40. `1.2:3.4.5` -> REJECT
+41. `1.2.3.4:80.` -> REJECT
+42. (empty line) -> REJECT
+43. `hello world` -> REJECT
+44. `:::` and `...` -> REJECT (each on its own line)
+
+Quit behavior:
+- `END` -> prints "Program terminated." and exits.
+- `end`, `END ` (trailing space), ` END`, `The END` -> NOT a quit; each prints "No valid IPv4 address found." and prompts again.
+- Input that ends without END (EOF) -> prints "Program terminated." and exits.
+
+Expected success line for test 2, exactly:
+Extracted IPv4 address: 192.168.1.1 (decimal value: 3232235777, port: 80)
+
+==================================================================
+# SECTION 7 - VERIFICATION
+==================================================================
+
+If you can run code: compile with the command from A2, feed all Section 6 inputs (one per line, ending with END) into the program, and compare the actual output to the expected results. Fix any mismatch and re-run until everything matches. If you cannot run code, hand-trace at least tests 2, 5, 12, 14, 18, 24, 32, 35, 37, and 41 step by step against your code and confirm each.
+
+==================================================================
+# SECTION 8 - HOW TO RESPOND
+==================================================================
+
+Reply with, in this order and nothing else:
+1. The complete program in ONE code block (file ipv4_extractor.cpp).
+2. The compile and run commands.
+3. A condensed bullet list (one line each) of the assumptions the program implements. Flag any place where you deviated from Section 2 and say why (there should be none).
+4. A results table for the Section 6 tests (input, expected, actual if you ran them).
+
+No long introduction and no closing summary. If you find a contradiction inside this prompt, follow Section 2 and mention it in one sentence.
